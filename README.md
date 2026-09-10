@@ -7,11 +7,11 @@ Hey! I'm **xyz**, an old 15yo who's interested in **coding, reverse engineering,
 This is a little bhop script I made in **Python** with some help from AI.
 
 Yes, I know using AI isn't exactly impressive.
-**I'm sorry Blake 💀**
+**I'm sorry Blake **
 
 ## 📌 About
 
-This project isn't perfect. In fact, it barely works properly sometimes 💀
+This project isn't perfect. In fact, it barely works properly sometimes 
 
 I made it mainly to learn more about programming and how things work under the hood.
 
