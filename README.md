@@ -4,7 +4,7 @@
 
 Hey, I’m xyz, a 15-year-old interested in programming, reverse engineering, Linux, and general computer science.
 
-This is a small bhop script I made in Python, with some help from AI.
+This is a small bhop script I made in Python/C++, with some help from AI.
 
 📌 About
 
