@@ -1,25 +1,22 @@
-# 🐇 Python Bhop Script
+🐇 Python Bhop Script
 
-> **⚠️ DISCLAIMER:** This project is **NOT VAC-safe**. Do **NOT** use this on your main account. You can get banned sooner or later. Use at your own risk.
+⚠️ DISCLAIMER: This project is not guaranteed to be VAC-safe. It is currently safe to the best of my knowledge, but I don’t know how long that will remain the case. I will try to keep the project updated when possible. Do not use it on an account you care about. Use it at your own risk.
 
-Hey! I'm **xyz**, an old 15yo who's interested in **coding, reverse engineering, Linux, and random tech stuff**.
+Hey, I’m xyz, a 15-year-old interested in programming, reverse engineering, Linux, and general computer science.
 
-This is a little bhop script I made in **Python** with some help from AI.
+This is a small bhop script I made in Python, with some help from AI.
 
-Yes, I know using AI isn't exactly impressive.
-**I'm sorry Blake **
+📌 About
 
-## 📌 About
+This project was mainly created as a learning project. I’m still learning how programming, game internals, and reverse engineering work, so the code isn’t perfect.
 
-This project isn't perfect. In fact, it barely works properly sometimes 
+The project may have bugs or behave unexpectedly.
 
-I made it mainly to learn more about programming and how things work under the hood.
+If you understand the code and have ideas for improvements, feel free to contribute or contact me.
 
-If you know what you're doing and want to improve the project, feel free to contribute or DM me.
+🧠 What I’m Learning
 
-## 🧠 Wanna Teach Me?
-
-I'm still learning, especially when it comes to:
+I’m currently interested in:
 
 * Python
 * Reverse engineering
@@ -28,55 +25,49 @@ I'm still learning, especially when it comes to:
 * Linux
 * General computer science
 
-If you're experienced with reverse engineering and want to teach me something, **please DM me**. I'm always down to learn.
+If you’re experienced in any of these areas and want to teach me something, feel free to DM me. I’d much rather understand why something works than simply have someone write it for me.
 
-I don't expect you to write everything for me either — explaining *why* something works would help me learn way more.
+💬 Contact
 
-## 💬 Contact
+Discord: mink.mp3
+Telegram: @minkcy
 
-**Discord:** `mink.mp3`
-**Telegram:** `@minkcy`
-
-Feel free to message me about:
+Feel free to contact me about:
 
 * Bugs
 * Improvements
+* Programming
 * Reverse engineering
-* Coding
 * Linux
-* Teaching me something new(about coding)
+* Learning resources
+* General questions
 
-## ⚠️ Important
+⚠️ Important
 
-This project is provided for **educational and experimental purposes**.
+This project is provided for educational and experimental purposes.
 
-**DO NOT use it on an account you care about.**
+The script is currently considered safe to use based on what I know, but this can change at any time. Anti-cheat systems can be updated, and I cannot guarantee that the project will remain undetected.
 
-It is **not VAC-safe**, and using it in an online game can result in a ban.
+I will try to keep the project updated when necessary, but there is no guarantee that it will always be safe.
 
-I am **not responsible for any bans or other consequences** resulting from using this project.
+Do not use it on an account you care about.
 
-## 🤝 Contributions
+I am not responsible for bans or other consequences resulting from the use of this project.
 
-Want to improve the code?
+🤝 Contributions
 
-Go ahead.
+Contributions and improvements are welcome.
 
-If you have a better implementation, find a bug, or just want to experiment with the project, contributions are welcome.
+If you find a bug, have a better implementation, or want to experiment with the project, feel free to open an issue or submit a pull request.
 
-And if you somehow manage to make this actually good...
+If you improve something, I’d also appreciate an explanation of what you changed and why. I’m still learning, so it helps me understand the code rather than just copying a solution.
 
-**please teach me what you did 😭**
+⸻
 
----
+⭐ Final Note
 
-### ⭐ Final note
+This is a learning project, not professional software.
 
-I'm still learning, so don't expect professional-quality code here.
+I started it to experiment with Python, AI-assisted development, and understanding how things work under the hood.
 
-This project started as me messing around with Python + AI and trying to understand how everything works.
-
-**IK IT'S BAD OKAY!!! 😭**
-
-If you can teach me something, **DM me.**
-
+If you have something to teach me, feel free to reach out.
