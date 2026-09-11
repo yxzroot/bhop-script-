@@ -1,0 +1,323 @@
+/*
+ * ============================================================================
+ *  CS2 External Bunny Hop — Educational Reference
+ * ============================================================================
+ *
+ *  Architecture:
+ *    - Reads CS2 process memory via ReadProcessMemory (user-mode, no injection).
+ *    - Detects FL_ONGROUND from the local player's m_fFlags field.
+ *    - Sends a synthetic spacebar press through SendInput when the player
+ *      lands while the user is holding SPACE.
+ *    - Adds small random jitter to the jump timing to approximate human input.
+ *
+ *  Compile (MSVC):
+ *      cl /EHsc /O2 cs2_bhop.cpp /link user32.lib advapi32.lib
+ *
+ *  Compile (MinGW / g++):
+ *      g++ -O2 -o cs2_bhop.exe cs2_bhop.cpp -luser32 -ladvapi32
+ *
+ *  Run:
+ *      Run as Administrator (required for OpenProcess on protected games).
+ *
+ *  DISCLAIMER:
+ *      CS2 uses VAC and VAC Live anti-cheat.  Using software that reads
+ *      game memory or simulates input in a live match WILL risk a ban.
+ *      This code is provided strictly for educational purposes — to
+ *      illustrate external memory reading, offset management, and input
+ *      simulation on the Source 2 engine.  Use at your own risk.
+ *
+ * ============================================================================
+ */
+
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <TlHelp32.h>
+
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#include <random>
+#include <string>
+#include <thread>
+
+// ============================================================================
+//  Offset table — UPDATE THESE when CS2 patches.
+//  Sources:  https://github.com/a2x/cs2-dumper  (auto-generated offsets)
+//            or any other community offset dumper.
+// ============================================================================
+namespace offsets
+{
+    // ----- client.dll offsets -----
+    // Pointer to the local player's C_CSPlayerPawn*.
+    // Found in client.dll via pattern scan or offset dump.
+    constexpr std::ptrdiff_t dwLocalPlayerPawn = 0x1880E48;   // UPDATE ME
+
+    // ----- C_BaseEntity / C_CSPlayerPawn field offsets -----
+    // m_fFlags — bitmask containing FL_ONGROUND (bit 0).
+    constexpr std::ptrdiff_t m_fFlags = 0x3EC;                // UPDATE ME
+
+    // (Optional) Additional offsets you might need for more advanced features:
+    // constexpr std::ptrdiff_t m_vecVelocity   = 0x???;
+    // constexpr std::ptrdiff_t m_iHealth        = 0x344;
+    // constexpr std::ptrdiff_t m_iTeamNum       = 0x3CB;
+}
+
+// Bitmask: the engine sets bit 0 when the pawn is standing on a surface.
+constexpr uint32_t FL_ONGROUND = (1 << 0);
+
+// ============================================================================
+//  Configuration
+// ============================================================================
+namespace config
+{
+    // Key bindings
+    constexpr int BHOP_KEY   = VK_SPACE;   // Hold to bhop
+    constexpr int TOGGLE_KEY = VK_INSERT;  // Toggle bhop on/off
+    constexpr int EXIT_KEY   = VK_END;     // Kill the program
+
+    // Timing
+    constexpr int POLL_INTERVAL_US = 800;  // Microseconds between memory polls
+    constexpr int JITTER_MIN_MS   = 0;     // Minimum random delay (ms)
+    constexpr int JITTER_MAX_MS   = 2;     // Maximum random delay (ms)
+
+    // Target process
+    const std::string PROCESS_NAME = "cs2.exe";
+    const std::string MODULE_NAME  = "client.dll";
+    const std::string WINDOW_NAME  = "Counter-Strike 2";
+}
+
+// ============================================================================
+//  Utility — Process / Module helpers
+// ============================================================================
+
+// Returns the PID of the first process whose exe matches `name`, or 0.
+static DWORD GetProcessIdByName(const std::string& name)
+{
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+
+    PROCESSENTRY32 pe{};
+    pe.dwSize = sizeof(pe);
+
+    DWORD pid = 0;
+    if (Process32First(snap, &pe)) {
+        do {
+            if (name == pe.szExeFile) {
+                pid = pe.th32ProcessID;
+                break;
+            }
+        } while (Process32Next(snap, &pe));
+    }
+    CloseHandle(snap);
+    return pid;
+}
+
+// Returns the base address of `moduleName` inside the process `pid`, or 0.
+static uintptr_t GetModuleBaseAddress(DWORD pid, const std::string& moduleName)
+{
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+
+    MODULEENTRY32 me{};
+    me.dwSize = sizeof(me);
+
+    uintptr_t base = 0;
+    if (Module32First(snap, &me)) {
+        do {
+            if (moduleName == me.szModule) {
+                base = reinterpret_cast<uintptr_t>(me.modBaseAddr);
+                break;
+            }
+        } while (Module32Next(snap, &me));
+    }
+    CloseHandle(snap);
+    return base;
+}
+
+// ============================================================================
+//  Utility — Safe memory read wrapper
+// ============================================================================
+
+template <typename T>
+static bool RPM(HANDLE hProcess, uintptr_t address, T& outValue)
+{
+    SIZE_T bytesRead = 0;
+    BOOL ok = ReadProcessMemory(
+        hProcess,
+        reinterpret_cast<LPCVOID>(address),
+        &outValue,
+        sizeof(T),
+        &bytesRead
+    );
+    return ok && (bytesRead == sizeof(T));
+}
+
+// ============================================================================
+//  Utility — Input simulation
+// ============================================================================
+
+static void SendKeyPress(WORD vkCode)
+{
+    WORD scan = static_cast<WORD>(MapVirtualKey(vkCode, MAPVK_VK_TO_VSC));
+
+    INPUT inputs[2]{};
+
+    // Key down
+    inputs[0].type           = INPUT_KEYBOARD;
+    inputs[0].ki.wVk         = vkCode;
+    inputs[0].ki.wScan       = scan;
+    inputs[0].ki.dwFlags     = KEYEVENTF_SCANCODE;
+
+    // Key up
+    inputs[1].type           = INPUT_KEYBOARD;
+    inputs[1].ki.wVk         = vkCode;
+    inputs[1].ki.wScan       = scan;
+    inputs[1].ki.dwFlags     = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+
+    SendInput(2, inputs, sizeof(INPUT));
+}
+
+// ============================================================================
+//  Main
+// ============================================================================
+
+int main()
+{
+    // ── Banner ──────────────────────────────────────────────────────────────
+    std::cout << R"(
+  ╔══════════════════════════════════════════════╗
+  ║      CS2 External Bunny Hop  (Educational)  ║
+  ╠══════════════════════════════════════════════╣
+  ║  SPACE  — hold to bunny hop                 ║
+  ║  INSERT — toggle bhop on / off              ║
+  ║  END    — exit                              ║
+  ╚══════════════════════════════════════════════╝
+)" << '\n';
+
+    // ── Locate CS2 process ──────────────────────────────────────────────────
+    std::cout << "[*] Waiting for " << config::PROCESS_NAME << "...\n";
+
+    DWORD pid = 0;
+    while (pid == 0) {
+        pid = GetProcessIdByName(config::PROCESS_NAME);
+        if (pid == 0) Sleep(1000);
+    }
+    std::cout << "[+] Found " << config::PROCESS_NAME << "  (PID " << pid << ")\n";
+
+    // ── Open process handle ─────────────────────────────────────────────────
+    HANDLE hProcess = OpenProcess(PROCESS_VM_READ, FALSE, pid);
+    if (!hProcess) {
+        std::cerr << "[!] OpenProcess failed (error " << GetLastError()
+                  << "). Are you running as Administrator?\n";
+        return 1;
+    }
+    std::cout << "[+] Process handle acquired.\n";
+
+    // ── Resolve client.dll base ─────────────────────────────────────────────
+    uintptr_t clientBase = 0;
+    std::cout << "[*] Waiting for " << config::MODULE_NAME << "...\n";
+    while (clientBase == 0) {
+        clientBase = GetModuleBaseAddress(pid, config::MODULE_NAME);
+        if (clientBase == 0) Sleep(500);
+    }
+    std::cout << "[+] " << config::MODULE_NAME << " @ 0x"
+              << std::hex << clientBase << std::dec << "\n\n";
+
+    // ── Random jitter generator ─────────────────────────────────────────────
+    std::mt19937 rng(static_cast<unsigned>(
+        std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::uniform_int_distribution<int> jitterDist(
+        config::JITTER_MIN_MS, config::JITTER_MAX_MS);
+
+    // ── State ───────────────────────────────────────────────────────────────
+    bool bhopEnabled    = true;
+    bool togglePressed  = false;
+    bool wasOnGround    = false;
+
+    std::cout << "[+] Bhop: ON\n";
+
+    // ── Main loop ───────────────────────────────────────────────────────────
+    while (true)
+    {
+        // --- Exit key ---
+        if (GetAsyncKeyState(config::EXIT_KEY) & 0x8000) {
+            std::cout << "\n[*] Exit key pressed. Shutting down.\n";
+            break;
+        }
+
+        // --- Safety: make sure the game is still running ---
+        DWORD exitCode = 0;
+        if (!GetExitCodeProcess(hProcess, &exitCode) || exitCode != STILL_ACTIVE) {
+            std::cout << "\n[!] Game process exited. Shutting down.\n";
+            break;
+        }
+
+        // --- Safety: only act when CS2 window is in the foreground ---
+        HWND fgWindow = GetForegroundWindow();
+        bool gameIsFocused = false;
+        if (fgWindow) {
+            char title[256]{};
+            GetWindowTextA(fgWindow, title, sizeof(title));
+            gameIsFocused = (std::string(title).find(config::WINDOW_NAME) != std::string::npos);
+        }
+
+        // --- Toggle key (INSERT) — edge-triggered ---
+        if (GetAsyncKeyState(config::TOGGLE_KEY) & 0x8000) {
+            if (!togglePressed) {
+                bhopEnabled = !bhopEnabled;
+                std::cout << "[~] Bhop: " << (bhopEnabled ? "ON" : "OFF") << "\n";
+                togglePressed = true;
+            }
+        } else {
+            togglePressed = false;
+        }
+
+        // --- Core bhop logic ---
+        if (bhopEnabled && gameIsFocused && (GetAsyncKeyState(config::BHOP_KEY) & 0x8000))
+        {
+            // 1. Read the local player pawn pointer from client.dll
+            uintptr_t pawnPtr = 0;
+            if (!RPM(hProcess, clientBase + offsets::dwLocalPlayerPawn, pawnPtr) || pawnPtr == 0) {
+                // Player not spawned or pointer invalid — skip this tick.
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                continue;
+            }
+
+            // 2. Read m_fFlags from the pawn
+            uint32_t flags = 0;
+            if (!RPM(hProcess, pawnPtr + offsets::m_fFlags, flags)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                continue;
+            }
+
+            bool onGround = (flags & FL_ONGROUND) != 0;
+
+            // 3. Jump the instant we land (transition from airborne → grounded)
+            if (onGround)
+            {
+                // Add a small random delay to humanize the input
+                int jitter = jitterDist(rng);
+                if (jitter > 0)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(jitter));
+
+                SendKeyPress(VK_SPACE);
+            }
+
+            wasOnGround = onGround;
+
+            // High-frequency poll while bhop is active
+            std::this_thread::sleep_for(std::chrono::microseconds(config::POLL_INTERVAL_US));
+        }
+        else
+        {
+            // Idle — low CPU usage
+            wasOnGround = false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    }
+
+    // ── Cleanup ─────────────────────────────────────────────────────────────
+    CloseHandle(hProcess);
+    std::cout << "[*] Handle closed. Goodbye.\n";
+    return 0;
+}
