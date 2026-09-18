@@ -1,48 +1,107 @@
 # Velocity
 
-An open-source bhop project built as a practical programming and reverse-engineering learning project.
+**An open-source bhop project built for learning, experimenting, and having fun with game-related programming.**
 
-> ⚠️ **Educational project:** This software interacts with a game and may trigger anti-cheat systems. Use it only where permitted and at your own risk. No guarantee is made regarding account safety or compatibility with future updates.
+> ⚠️ **Educational project:** Velocity interacts with a game and may trigger anti-cheat systems. Use it only where permitted and at your own risk. Account safety and compatibility with future game updates are not guaranteed.
 
 ## What is Velocity?
 
-Velocity started as a small project for learning how game-related software works under the hood.
+Velocity started as a small project to learn more about how game-related software works under the hood.
 
-The project combines Python and C++ and is mainly an experiment in:
+It has grown into a larger experiment involving:
 
-* Low-level programming
+* Python
+* C++
 * Game internals
 * Real-time systems
 * Reverse engineering
-* Python/C++ development
+* UI development
+* Windows application development
 
-The code is actively being improved and may change significantly between versions.
+The project is still actively being developed, so things can change, break, or get completely redesigned.
 
-## Current Status
+## Status
 
-**Early development**
+**Early development / actively maintained**
 
-The project is functional but still evolving. Expect bugs, unfinished features, and breaking changes.
+Velocity is functional, but it is still a work in progress.
+
+Expect:
+
+* Bugs
+* Experimental features
+* UI changes
+* Breaking changes
+* New ideas being tested
+
+I'll continue working on Velocity, but I don't know how long or how actively it will be updated. That will partly depend on how much interest the project gets through the channel and whether continuing to develop it feels worth the time.
+
+As long as there's a reason to keep building it, I'll keep working on it.
+
+## Releases
+
+Prebuilt Windows releases are provided separately from the source code.
+
+The release builds are intended to be **download → run** without requiring the development environment used to create Velocity.
+
+Development and experimental builds may behave differently from stable releases.
+
+## Bug Reports
+
+If Velocity crashes or something isn't working correctly, please report it.
+
+Velocity's crash handler does **not** automatically upload crash information or telemetry.
+
+When an unexpected crash happens, Velocity provides an option to open the GitHub issue tracker so you can manually create a report *(will be added in the next updates)*.
+
+### GitHub Issues
+
+**Report a bug:**
+https://github.com/yxzroot/bhop-script-/issues
+
+When reporting a crash, please include:
+
+* What you were doing when it happened
+* What you expected to happen
+* What actually happened
+* Your Velocity version/build
+* Any crash details provided by Velocity
+
+Screenshots or videos are also useful when possible.
 
 ## Development
 
-Clone the repository and inspect the source code:
+Clone the repository:
 
 ```bash
 git clone https://github.com/yxzroot/bhop-script-.git
 cd bhop-script-
 ```
 
-Build/run instructions will be documented here as the project develops.
+The project currently contains both Python and C++ components.
+
+Build and development instructions will continue to be expanded as the project develops.
 
 ## Contributing
 
-Contributions, bug reports, and improvements are welcome.
+Contributions, ideas, bug reports, and improvements are welcome.
 
-If you open an issue or pull request, please explain what you changed and why. This project is also a learning project, so understanding the reasoning behind changes is important.
+If you're opening a pull request, explain what you changed and why.
+
+Velocity is also a learning project, so understanding **why** something works is just as important as making it work.
+
+## Socials
+
+Made by **xyz**.
+
+* **GitHub:** https://github.com/yxzroot
+* **Telegram:** `@minkcy`
+* **YouTube:** https://www.youtube.com/@wez-c2v
+
+Feel free to reach out for questions, feedback, or help with Velocity.
 
 ## License
 
 Velocity is licensed under the **GNU General Public License v3.0**.
 
-See [`LICENSE`](LICENSE) for the full license.
+See [`LICENSE`](https://github.com/yxzroot/bhop-script-/blob/main/LICENSE) for the full license.
