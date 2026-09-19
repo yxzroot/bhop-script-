@@ -8,7 +8,7 @@
 
 Velocity started as a small project to learn more about how game-related software works under the hood.
 
-It has grown into a larger experiment involving:
+It has grown into a bigger experiment involving:
 
 * Python
 * C++
@@ -18,13 +18,13 @@ It has grown into a larger experiment involving:
 * UI development
 * Windows application development
 
-The project is still actively being developed, so things can change, break, or get completely redesigned.
+The project is still being worked on, so things can change, break, or get completely redesigned.
 
 ## Status
 
-**Early development / actively maintained**
+**Early development / actively working on it**
 
-Velocity is functional, but it is still a work in progress.
+Velocity is functional, but it's still a work in progress.
 
 Expect:
 
@@ -32,11 +32,19 @@ Expect:
 * Experimental features
 * UI changes
 * Breaking changes
-* New ideas being tested
+* Random ideas being tested
 
-I'll continue working on Velocity, but I don't know how long or how actively it will be updated. That will partly depend on how much interest the project gets through the channel and whether continuing to develop it feels worth the time.
+I'll keep working on Velocity as long as I feel like there's a reason to keep building it and people are actually interested in it.
 
-As long as there's a reason to keep building it, I'll keep working on it.
+## Why is there no V1?
+
+Wondering why the releases start at **V2**? Well... V1 was honestly kinda shit.
+
+The source code was horrible, there were problems everywhere, and I just wasn't happy with how it turned out.
+
+So instead of releasing it like that, I scrapped it and started over with V2.
+
+So yeah, **V2 was basically the first real public release of Velocity.**
 
 ## Releases
 
@@ -46,17 +54,24 @@ The release builds are intended to be **download → run** without requiring the
 
 Development and experimental builds may behave differently from stable releases.
 
+## Linux Support
+
+I really like Linux, so I'm going to **try adding Linux support** to Velocity at some point.
+
+No promises yet, but I'd genuinely like to see if I can get it working.
+
 ## Bug Reports
 
 If Velocity crashes or something isn't working correctly, please report it.
 
 Velocity's crash handler does **not** automatically upload crash information or telemetry.
 
-When an unexpected crash happens, Velocity provides an option to open the GitHub issue tracker so you can manually create a report *(will be added in the next updates)*.
+When an unexpected crash happens, Velocity provides an option to open the GitHub issue tracker so you can manually create a report.
 
 ### GitHub Issues
 
 **Report a bug:**
+
 https://github.com/yxzroot/bhop-script-/issues
 
 When reporting a crash, please include:
@@ -102,6 +117,6 @@ Feel free to reach out for questions, feedback, or help with Velocity.
 
 ## License
 
-Velocity is licensed under the **GNU General Public License v3.0**.
+Velocity is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
 See [`LICENSE`](https://github.com/yxzroot/bhop-script-/blob/main/LICENSE) for the full license.
