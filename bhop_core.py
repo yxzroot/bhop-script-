@@ -1,0 +1,274 @@
+"""Runtime, settings, and process-attachment code for Bhop Script.
+
+The UI lives in ``cs2_bhop.py``. Keeping non-visual behavior here makes the
+application easier to maintain and test without opening a Tk window.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import json
+import queue
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+from build_config import APP_DISPLAY_VERSION, APP_NAME, APP_VERSION, BUILD_CHANNEL, BUILD_FLAVOR, BUILD_TYPE
+
+CHANGELOG = (
+    ("2.2 beta", "A dedicated Updates workspace, official news channel, live themes, and safer stable update delivery."),
+    ("2.0.0", "Dashboard refresh, saved settings, presets, debug logging, and keybind controls."),
+    ("1.3.0", "Added single-instance protection and per-session logs."),
+    ("1.0.0", "Initial desktop release."),
+)
+
+# Current client.dll offsets.
+OFFSET_LOCAL_PLAYER_PAWN = 0x23CCC08
+OFFSET_FORCE_JUMP = 0x20BA010
+OFFSET_FLAGS = 0x3F4
+FL_ONGROUND = 1
+BHOP_KEY = 0x20  # Space
+
+DEFAULT_SETTINGS = {
+    "toggle_key": 0x2D,  # Insert
+    "exit_key": 0x23,  # End
+    "enabled": True,
+    "debug_mode": False,
+    "preset": "Default",
+    "theme": "Dark",
+    "auto_check_updates": True,
+    "auto_download_updates": True,
+}
+
+PRESETS = {
+    "Default": {"toggle_key": 0x2D, "exit_key": 0x23},
+    "Function Keys": {"toggle_key": 0x75, "exit_key": 0x76},  # F6 / F7
+    "Home + End": {"toggle_key": 0x24, "exit_key": 0x23},
+}
+
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+
+
+def key_held(key: int) -> bool:
+    return (user32.GetAsyncKeyState(key) & 0x8000) != 0
+
+
+def game_is_focused() -> bool:
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return False
+    title = ctypes.create_string_buffer(256)
+    user32.GetWindowTextA(hwnd, title, len(title))
+    return b"Counter-Strike 2" in title.value
+
+
+class SettingsStore:
+    """Thread-safe JSON-backed user preferences."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._lock = threading.Lock()
+        self._values = DEFAULT_SETTINGS.copy()
+        self._load()
+
+    def _load(self):
+        try:
+            loaded = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict):
+                raise ValueError("Settings root must be an object")
+            for key, default in DEFAULT_SETTINGS.items():
+                value = loaded.get(key, default)
+                if key in ("toggle_key", "exit_key"):
+                    if not isinstance(value, int) or not 1 <= value <= 255:
+                        value = default
+                elif key in ("enabled", "debug_mode"):
+                    value = bool(value)
+                elif key == "preset" and not isinstance(value, str):
+                    value = default
+                elif key == "theme" and not isinstance(value, str):
+                    value = default
+                elif key in ("auto_check_updates", "auto_download_updates"):
+                    value = bool(value)
+                self._values[key] = value
+        except FileNotFoundError:
+            self.save()
+        except (OSError, ValueError, json.JSONDecodeError):
+            # Keep safe defaults if a damaged settings file cannot be read.
+            self.save()
+
+    def save(self):
+        """Write settings atomically so an interruption cannot corrupt them."""
+        with self._lock:
+            payload = json.dumps(self._values, indent=2, sort_keys=True)
+            temporary = self.path.with_suffix(".tmp")
+            try:
+                temporary.write_text(payload + "\n", encoding="utf-8")
+                temporary.replace(self.path)
+            except OSError:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return self._values.copy()
+
+    def update(self, **changes):
+        with self._lock:
+            self._values.update(changes)
+        self.save()
+
+    def toggle_enabled(self) -> bool:
+        with self._lock:
+            self._values["enabled"] = not self._values["enabled"]
+            enabled = self._values["enabled"]
+        self.save()
+        return enabled
+
+    def reset(self):
+        with self._lock:
+            self._values = DEFAULT_SETTINGS.copy()
+        self.save()
+        return self.snapshot()
+
+    def apply_preset(self, name: str):
+        if name not in PRESETS:
+            raise ValueError(f"Unknown preset: {name}")
+        with self._lock:
+            self._values.update(PRESETS[name])
+            self._values["preset"] = name
+        self.save()
+        return self.snapshot()
+
+
+class BhopWorker:
+    """Attaches to CS2 and runs the low-CPU bunny-hop loop in a worker thread."""
+
+    def __init__(self, events: queue.Queue, stop_event: threading.Event, settings: SettingsStore):
+        self.events = events
+        self.stop_event = stop_event
+        self.settings = settings
+
+    def _event(self, kind: str, value=None):
+        self.events.put((kind, value))
+
+    def _ensure_pymem(self):
+        try:
+            import pymem
+            import pymem.process
+            return pymem
+        except ImportError:
+            if getattr(sys, "frozen", False):
+                self._event("log", "Required component pymem is missing from this release.")
+                self._event("status", ("Dependency missing — see Activity", "error"))
+                return None
+            self._event("log", "Installing required dependency: pymem…")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pymem"])
+            import pymem
+            import pymem.process
+            return pymem
+
+    def run(self):
+        pm = None
+        client_base = None
+        try:
+            pymem = self._ensure_pymem()
+            if pymem is None:
+                return
+            while not self.stop_event.is_set() and pm is None:
+                try:
+                    pm = pymem.Pymem("cs2.exe")
+                except pymem.exception.ProcessNotFound:
+                    self.stop_event.wait(1)
+                except pymem.exception.CouldNotOpenProcess:
+                    self._event("log", "Cannot open CS2. Run the launcher as Administrator.")
+                    self._event("status", ("Administrator access required", "error"))
+                    self.stop_event.wait(2)
+            if pm is None:
+                return
+
+            self._event("log", f"Attached to cs2.exe (PID {pm.process_id}).")
+            self._event("status", ("Waiting for client.dll", "waiting"))
+            while not self.stop_event.is_set() and client_base is None:
+                try:
+                    module = pymem.process.module_from_name(pm.process_handle, "client.dll")
+                    if module:
+                        client_base = module.lpBaseOfDll
+                except Exception:
+                    self._event("log", "CS2 closed before client.dll was ready. Shutting down Velocity.")
+                    self._event("close")
+                    self.stop_event.set()
+                    break
+                if client_base is None:
+                    self.stop_event.wait(0.5)
+            if client_base is None:
+                return
+
+            self._event("log", f"client.dll found at {hex(client_base)}.")
+            self._event("status", ("Attached — ready in game", "success"))
+            self._event("attached")
+            toggle_pressed = False
+            last_check = 0.0
+            focused = False
+            previous_focus = None
+
+            while not self.stop_event.is_set():
+                now = time.perf_counter()
+                current = self.settings.snapshot()
+                if key_held(current["exit_key"]):
+                    self._event("log", "Exit key pressed — closing cleanly.")
+                    self._event("close")
+                    self.stop_event.set()
+                    break
+                if key_held(current["toggle_key"]):
+                    if not toggle_pressed:
+                        enabled = self.settings.toggle_enabled()
+                        self._event("enabled", enabled)
+                        self._event("log", f"Bhop turned {'on' if enabled else 'off'} by keybind.")
+                        toggle_pressed = True
+                else:
+                    toggle_pressed = False
+
+                if now - last_check > 0.20:
+                    try:
+                        pm.read_int(client_base)
+                    except Exception:
+                        self._event("log", "CS2 was closed or connection was lost.")
+                        self._event("status", ("Connection lost", "error"))
+                        self._event("close")
+                        self.stop_event.set()
+                        break
+                    focused = game_is_focused()
+                    if current["debug_mode"] and focused != previous_focus:
+                        self._event("log", f"Debug: game focus {'gained' if focused else 'lost'}.")
+                    previous_focus, last_check = focused, now
+
+                if current["enabled"] and focused and key_held(BHOP_KEY):
+                    try:
+                        pawn = pm.read_longlong(client_base + OFFSET_LOCAL_PLAYER_PAWN)
+                        if pawn:
+                            flags = pm.read_uint(pawn + OFFSET_FLAGS)
+                            pm.write_int(client_base + OFFSET_FORCE_JUMP, 65537 if flags & FL_ONGROUND else 256)
+                    except Exception as error:
+                        if current["debug_mode"]:
+                            self._event("log", f"Debug: jump update failed: {error}")
+                        self.stop_event.wait(0.05)
+                    time.sleep(0)
+                else:
+                    # Event waiting keeps the idle path inexpensive and lets shutdown finish fast.
+                    self.stop_event.wait(0.005)
+        except Exception as error:
+            self._event("log", f"Unexpected error: {type(error).__name__}: {error}")
+            self._event("status", ("Error — see Activity", "error"))
+        finally:
+            if pm:
+                try:
+                    if client_base:
+                        pm.write_int(client_base + OFFSET_FORCE_JUMP, 256)
+                    pm.close_process()
+                except Exception:
+                    pass
+            self._event("stopped")
